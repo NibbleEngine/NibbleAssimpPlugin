@@ -2,8 +2,10 @@
 
   <PropertyGroup>
     <TargetFramework>net5.0</TargetFramework>
+	<RuntimeIdentifier>win-x64</RuntimeIdentifier>
     <AllowUnsafeBlocks>True</AllowUnsafeBlocks>
     <PlatformTarget>x64</PlatformTarget>
+	<IsPublishable>false</IsPublishable>
   </PropertyGroup>
 
   <ItemGroup>
