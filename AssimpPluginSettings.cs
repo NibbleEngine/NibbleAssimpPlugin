@@ -1,7 +1,6 @@
 ﻿using NbCore.Plugins;
 using Newtonsoft.Json;
 using ImGuiNET;
-using ImGuiHelper;
 using System.Runtime.InteropServices;
 
 namespace NibbleAssimpPlugin

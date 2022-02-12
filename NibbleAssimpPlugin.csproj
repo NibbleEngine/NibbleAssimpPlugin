@@ -23,7 +23,7 @@
   </ItemGroup>
 
   <ItemGroup>
-    <ProjectReference Include="..\Nibble\Nibble.csproj" />
+    <ProjectReference Include="..\NibbleDLL\NibbleDLL.csproj" />
   </ItemGroup>
 
 </Project>
