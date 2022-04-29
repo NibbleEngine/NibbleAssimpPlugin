@@ -1,14 +1,289 @@
 ﻿using System;
+using System.IO;
 using System.Collections.Generic;
 using Assimp;
 using NbCore;
 using NbCore.Math;
 using NbCore.Systems;
-using NbCore.Utils;
 
-namespace NbCore.Export
+namespace NibbleAssimpPlugin
 {
 
+    public static class AssimpImporter
+    {
+        public static AssimpContext _ctx;
+        public static Plugin PluginRef;
+
+
+
+        public static SceneGraphNode ImportNode(Node node, Scene scn)
+        {
+
+            SceneNodeType nodeType = SceneNodeType.LOCATOR;
+            if (node.HasMeshes)
+            {
+                nodeType = SceneNodeType.MESH;
+                //TODO : CREATE MESH NODE
+                //_n = PluginRef.EngineRef.CreateMeshNode();
+            }
+
+            SceneGraphNode _n = new SceneGraphNode(nodeType)
+            {
+                Name = node.Name,
+            };
+
+            NbMatrix4 transform = new();
+            transform.M11 = node.Transform.A1;
+            transform.M12 = node.Transform.A2;
+            transform.M13 = node.Transform.A3;
+            transform.M14 = node.Transform.A4;
+            transform.M21 = node.Transform.B1;
+            transform.M22 = node.Transform.B2;
+            transform.M23 = node.Transform.B3;
+            transform.M24 = node.Transform.B4;
+            transform.M31 = node.Transform.C1;
+            transform.M32 = node.Transform.C2;
+            transform.M33 = node.Transform.C3;
+            transform.M34 = node.Transform.C4;
+            transform.M41 = node.Transform.D1;
+            transform.M42 = node.Transform.D2;
+            transform.M43 = node.Transform.D3;
+            transform.M44 = node.Transform.D4;
+
+            //Add Transform Component
+            TransformData td = TransformData.CreateFromMatrix(transform);
+            
+            TransformComponent tc = new(td);
+            _n.AddComponent<TransformComponent>(tc);
+
+            if (node.HasMeshes)
+            {
+                Mesh assimp_mesh = scn.Meshes[node.MeshIndices[0]];
+                Material assimp_mat = scn.Materials[assimp_mesh.MaterialIndex];
+                
+                NbMeshData nibble_mesh_data = GenerateMeshData(assimp_mesh);
+                NbMeshMetaData nibble_mesh_metadata = GenerateGeometryMetaData(assimp_mesh.VertexCount,
+                                                                               nibble_mesh_data.IndexBuffer.Length / 3);
+                MeshMaterial nibble_mat = GenerateMaterial(assimp_mat);
+
+                //Generate NbMesh
+                NbMesh nibble_mesh = new()
+                {
+                    Hash = NbHasher.CombineHash(nibble_mesh_data.Hash, nibble_mesh_metadata.GetHash()),
+                    Data = nibble_mesh_data,
+                    MetaData = nibble_mesh_metadata,
+                    Material = nibble_mat
+                };
+
+                MeshComponent mc = new()
+                {
+                    Mesh = nibble_mesh
+                };
+
+                //TODO Process the corresponding mesh if needed
+                _n.AddComponent<MeshComponent>(mc);
+            }
+
+
+            foreach (Node child in node.Children)
+            {
+                SceneGraphNode _c = ImportNode(child, scn);
+                _c.SetParent(_n);
+            }
+            
+            return _n;
+        }
+
+        public static SceneGraphNode Import(string filepath)
+        {
+            Scene scn = _ctx.ImportFile(filepath);
+            
+            return ImportNode(scn.RootNode, scn);
+        }
+
+        private static MeshMaterial GenerateMaterial(Material mat)
+        {
+            MeshMaterial material = new();
+            material.Name = mat.Name;
+
+            if (mat.HasTextureDiffuse)
+            {
+                material.AddFlag(MaterialFlagEnum._F01_DIFFUSEMAP);
+            }
+
+            if (mat.HasTextureNormal)
+            {
+                material.AddFlag(MaterialFlagEnum._F03_NORMALMAP);
+            }
+
+            if (mat.HasColorDiffuse)
+            {
+                //Add material uniform
+                NbUniform uf = new()
+                {
+                    Name = "mainColor",
+                    Values = new NbVector4(mat.ColorDiffuse.R, mat.ColorDiffuse.G, mat.ColorDiffuse.B, mat.ColorDiffuse.A),
+                    State = new NbUniformState()
+                    {
+                        ShaderBinding = "mpCustomPerMaterial.uniforms[0]",
+                        Type = NbUniformType.Vector4
+                    }
+                };
+
+                material.Uniforms.Add(uf);
+            }
+
+            //Compile Material Shader
+            GLSLShaderConfig conf = PluginRef.EngineRef.GetShaderConfigByName("UberShader_Deferred_Lit");
+            ulong shader_hash = PluginRef.EngineRef.CalculateShaderHash(conf, PluginRef.EngineRef.GetMaterialShaderDirectives(material));
+
+            NbShader shader = PluginRef.EngineRef.GetShaderByHash(shader_hash);
+            if (shader == null)
+            {
+                shader = new()
+                {
+                    directives = PluginRef.EngineRef.GetMaterialShaderDirectives(material)
+                };
+
+                shader.SetShaderConfig(conf);
+                PluginRef.EngineRef.CompileShader(shader);
+            }
+
+            material.AttachShader(shader);
+
+            return material;
+        }
+
+        private static NbMeshMetaData GenerateGeometryMetaData(int vx_count, int tris_count)
+        {
+            NbMeshMetaData metadata = new()
+            {
+                BatchCount = tris_count * 3,
+                FirstSkinMat = 0,
+                LastSkinMat = 0,
+                VertrEndGraphics = vx_count - 1,
+                VertrEndPhysics = vx_count
+            };
+
+            return metadata;
+        }
+
+
+        public static NbMeshData GenerateMeshData(Mesh mesh)
+        {
+            NbMeshData data = new();
+
+            //Populate buffers
+            int bufferCount = 1; //Vertices
+            int vx_stride = 12;
+            bufferCount += mesh.HasNormals ? 1 : 0; //Normals
+            vx_stride += mesh.HasNormals ? 12 : 0; //Normals
+            bufferCount += mesh.HasTextureCoords(0) ? 1 : 0; //Uvs
+            vx_stride += mesh.HasTextureCoords(0) ? 8 : 0; //Uvs
+
+            data.buffers = new bufInfo[bufferCount];
+            data.VertexBufferStride = (uint) vx_stride;
+            data.VertexBuffer = new byte[vx_stride * mesh.VertexCount];
+            
+            //Prepare vx Buffers
+            data.buffers[0] = new()
+            {
+                count = 3,
+                normalize = false,
+                offset = 0x0,
+                semantic = 0,
+                sem_text = "vPosition",
+                stride = (uint)vx_stride,
+                type = NbPrimitiveDataType.Float
+            };
+
+            if (mesh.HasNormals)
+            {
+                data.buffers[1] = new()
+                {
+                    count = 3,
+                    normalize = false,
+                    offset = 12,
+                    semantic = 2,
+                    sem_text = "nPosition",
+                    stride = (uint) vx_stride,
+                    type = NbPrimitiveDataType.Float
+                };
+            }
+
+            if (mesh.HasTextureCoords(0))
+            {
+                data.buffers[2] = new()
+                {
+                    count = 2,
+                    normalize = false,
+                    offset = 24,
+                    semantic = 1,
+                    sem_text = "uvPosition",
+                    stride = (uint) vx_stride,
+                    type = NbPrimitiveDataType.Float
+                };
+            }
+
+            //Copy vertex data
+            MemoryStream ms = new MemoryStream(data.VertexBuffer);
+            BinaryWriter bw = new BinaryWriter(ms);
+            for (int i = 0; i < mesh.VertexCount; i++)
+            {
+                Vector3D vec = mesh.Vertices[i];
+                bw.Write(vec.X);
+                bw.Write(vec.Y);
+                bw.Write(vec.Z);
+
+                if (mesh.HasNormals)
+                {
+                    Vector3D normal = mesh.Normals[i];
+                    bw.Write(normal.X);
+                    bw.Write(normal.Y);
+                    bw.Write(normal.Z);
+                }
+
+                if (mesh.HasTextureCoords(0))
+                {
+                    Vector3D uv = mesh.TextureCoordinateChannels[0][i];
+                    bw.Write(uv.X);
+                    bw.Write(uv.Y);
+                }
+            }
+            ms.Close();
+
+            //Write Indices
+            int indicesCount = 0;
+            if (mesh.Faces[0].IndexCount == 4)
+                indicesCount = mesh.FaceCount * 3 * 2;
+            else
+                indicesCount = mesh.FaceCount * 3;
+            data.IndicesLength = NbPrimitiveDataType.UnsignedInt;
+            data.IndexBuffer = new byte[indicesCount * sizeof(uint)];
+            
+            ms = new MemoryStream(data.IndexBuffer);
+            bw = new BinaryWriter(ms);
+
+            for (int i = 0; i < mesh.FaceCount; i++)
+            {
+                bw.Write(mesh.Faces[i].Indices[0]);
+                bw.Write(mesh.Faces[i].Indices[1]);
+                bw.Write(mesh.Faces[i].Indices[2]);
+                
+                if (mesh.Faces[i].IndexCount == 4)
+                {
+                    bw.Write(mesh.Faces[i].Indices[0]);
+                    bw.Write(mesh.Faces[i].Indices[2]);
+                    bw.Write(mesh.Faces[i].Indices[3]);
+                } 
+            }
+
+            data.Hash = NbHasher.CombineHash(NbHasher.Hash(data.VertexBuffer),
+                                             NbHasher.Hash(data.IndexBuffer));
+            return data;
+        }
+    }
+    
     /* Bring that shit back when we are done with the transition to the ECS system
      
     public override Assimp.Node assimpExport(ref Assimp.Scene scn, ref Dictionary<int, int> meshImportStatus)
