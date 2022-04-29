@@ -4,7 +4,7 @@
     <TargetFramework>net5.0</TargetFramework>
 	<GenerateAssemblyInfo>false</GenerateAssemblyInfo>
 	<RuntimeIdentifier>win-x64</RuntimeIdentifier>
-	<BaseOutputPath>..\Build\Plugins</BaseOutputPath>
+	<BaseOutputPath>Build</BaseOutputPath>
     <AllowUnsafeBlocks>True</AllowUnsafeBlocks>
     <PlatformTarget>AnyCPU</PlatformTarget>
   </PropertyGroup>
@@ -15,19 +15,12 @@
   </ItemGroup>
 
   <ItemGroup>
-    <Reference Include="ImGui.NET">
-      <HintPath>..\lib\ImGui.NET.dll</HintPath>
+    <Reference Include="Nibble">
+      <HintPath>lib\Nibble.dll</HintPath>
+    </Reference>
+	<Reference Include="ImGui.NET">
+	  <HintPath>lib\ImGui.NET.dll</HintPath>
     </Reference>
   </ItemGroup>
-
-  <ItemGroup>
-    <ProjectReference Include="..\NibbleDLL\NibbleDLL.csproj" />
-  </ItemGroup>
-
-	<Target Name="CopyCustomContent" AfterTargets="Build">
-		<Message Text="Hooya $(TargetPath)" Importance="high" />
-		<Copy SourceFiles="$(TargetPath)" DestinationFolder="$(SolutionDir)Build\Plugins" />
-	</Target>
-	
 
 </Project>
