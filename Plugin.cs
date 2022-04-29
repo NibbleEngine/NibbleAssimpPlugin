@@ -38,11 +38,17 @@ namespace NibbleAssimpPlugin
             
             //Fetch Supported file formats
             string[] ImportFormats =  _ctx.GetSupportedImportFormats();
-                
+            Assimp.ExportFormatDescription[] ExportFormatDescriptions = _ctx.GetSupportedExportFormats();
+            string[] ExportFormats = new string[ExportFormatDescriptions.Length];
+            for (int i=0;i< ExportFormatDescriptions.Length; i++)
+                ExportFormats[i] = ExportFormatDescriptions[i].FormatId;  
+            
             openFileDialog = new("assimp-open-file", string.Join('|', ImportFormats), false); //Initialize OpenFileDialog
             openFileDialog.SetDialogPath(assemblypath);
 
-            Log("Loaded Assimp Plugin", LogVerbosityLevel.INFO);
+            Log($"Supported Import Formats: {string.Join(' ', ImportFormats)}", LogVerbosityLevel.INFO);
+            Log($"Supported Export Formats: {string.Join(' ', ExportFormats)}", LogVerbosityLevel.INFO);
+            Log("Plugin Loaded", LogVerbosityLevel.INFO);
         }
 
         public override void Draw()
