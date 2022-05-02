@@ -7,18 +7,22 @@
 	<BaseOutputPath>Build</BaseOutputPath>
     <AllowUnsafeBlocks>True</AllowUnsafeBlocks>
     <PlatformTarget>AnyCPU</PlatformTarget>
+	<ForceCopyNativeAssimp>True</ForceCopyNativeAssimp>
   </PropertyGroup>
 
   <ItemGroup>
-    <PackageReference Include="AssimpNet" Version="4.1.0" />
-    <PackageReference Include="Newtonsoft.Json" Version="13.0.1" />
+	<PackageReference Include="AssimpNet" Version="5.0.0-beta1" />
+	<PackageReference Include="Newtonsoft.Json" Version="13.0.1" />
   </ItemGroup>
 
+	<ItemGroup>
+		<ProjectReference Include="..\NibbleDLL\NibbleDLL\NibbleDLL.csproj">
+			<Configuration>$(Configuration)</Configuration>
+		</ProjectReference>
+	</ItemGroup>
+	
   <ItemGroup>
-    <Reference Include="Nibble">
-      <HintPath>lib\Nibble.dll</HintPath>
-    </Reference>
-	<Reference Include="ImGui.NET">
+    <Reference Include="ImGui.NET">
 	  <HintPath>lib\ImGui.NET.dll</HintPath>
     </Reference>
   </ItemGroup>

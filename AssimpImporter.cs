@@ -13,8 +13,16 @@ namespace NibbleAssimpPlugin
     {
         public static AssimpContext _ctx;
         public static Plugin PluginRef;
+        public static string WorkingDirectory = "";
+
+        public static Dictionary<string, NbTexture> ImportedTextures;
 
 
+        public static void InitState(string dirpath)
+        {
+            WorkingDirectory = dirpath;
+            ImportedTextures = new();
+        }
 
         public static SceneGraphNode ImportNode(Node node, Scene scn)
         {
@@ -62,7 +70,7 @@ namespace NibbleAssimpPlugin
                 Material assimp_mat = scn.Materials[assimp_mesh.MaterialIndex];
                 
                 NbMeshData nibble_mesh_data = GenerateMeshData(assimp_mesh);
-                NbMeshMetaData nibble_mesh_metadata = GenerateGeometryMetaData(assimp_mesh.VertexCount,
+                NbMeshMetaData nibble_mesh_metadata = GenerateGeometryMetaData(nibble_mesh_data.VertexBuffer.Length / (int) nibble_mesh_data.VertexBufferStride,
                                                                                nibble_mesh_data.IndexBuffer.Length / 3);
                 MeshMaterial nibble_mat = GenerateMaterial(assimp_mat);
 
@@ -84,6 +92,11 @@ namespace NibbleAssimpPlugin
                 _n.AddComponent<MeshComponent>(mc);
             }
 
+            //Parse Textures
+            foreach (EmbeddedTexture texture in scn.Textures)
+            {
+                PluginRef.Log("Do something with the texture!", LogVerbosityLevel.INFO);
+            }
 
             foreach (Node child in node.Children)
             {
@@ -96,9 +109,19 @@ namespace NibbleAssimpPlugin
 
         public static SceneGraphNode Import(string filepath)
         {
-            Scene scn = _ctx.ImportFile(filepath);
-            
+            Scene scn = _ctx.ImportFile(filepath, PostProcessSteps.CalculateTangentSpace | PostProcessSteps.FlipUVs | PostProcessSteps.Triangulate);
             return ImportNode(scn.RootNode, scn);
+        }
+
+        private static void LoadTexture(string path)
+        {
+            //Load texture here
+            if (!ImportedTextures.ContainsKey(path))
+            {
+                NbTexture tex = PluginRef.EngineRef.CreateTexture(Path.Join(WorkingDirectory, path),
+                    NbTextureWrapMode.Repeat, NbTextureFilter.Linear, NbTextureFilter.Linear);
+                ImportedTextures[path] = tex;
+            }
         }
 
         private static MeshMaterial GenerateMaterial(Material mat)
@@ -106,35 +129,27 @@ namespace NibbleAssimpPlugin
             MeshMaterial material = new();
             material.Name = mat.Name;
 
+            //Find out material flags
             if (mat.HasTextureDiffuse)
             {
-                material.AddFlag(MaterialFlagEnum._F01_DIFFUSEMAP);
+                LoadTexture(mat.TextureDiffuse.FilePath);
+                material.AddFlag(MaterialFlagEnum._NB_DIFFUSE_MAP);
             }
-
+                    
             if (mat.HasTextureNormal)
             {
-                material.AddFlag(MaterialFlagEnum._F03_NORMALMAP);
+                LoadTexture(mat.TextureNormal.FilePath);
+                material.AddFlag(MaterialFlagEnum._NB_NORMAL_MAP);
             }
-
-            if (mat.HasColorDiffuse)
+                
+            if (mat.HasTextureEmissive)
             {
-                //Add material uniform
-                NbUniform uf = new()
-                {
-                    Name = "mainColor",
-                    Values = new NbVector4(mat.ColorDiffuse.R, mat.ColorDiffuse.G, mat.ColorDiffuse.B, mat.ColorDiffuse.A),
-                    State = new NbUniformState()
-                    {
-                        ShaderBinding = "mpCustomPerMaterial.uniforms[0]",
-                        Type = NbUniformType.Vector4
-                    }
-                };
-
-                material.Uniforms.Add(uf);
+                LoadTexture(mat.TextureEmissive.FilePath);
+                material.AddFlag(MaterialFlagEnum._NB_EMISSIVE_MAP);
             }
-
+                
             //Compile Material Shader
-            GLSLShaderConfig conf = PluginRef.EngineRef.GetShaderConfigByName("UberShader_Deferred_Lit");
+            GLSLShaderConfig conf = PluginRef.EngineRef.GetShaderConfigByName("UberShader_Deferred");
             ulong shader_hash = PluginRef.EngineRef.CalculateShaderHash(conf, PluginRef.EngineRef.GetMaterialShaderDirectives(material));
 
             NbShader shader = PluginRef.EngineRef.GetShaderByHash(shader_hash);
@@ -149,8 +164,69 @@ namespace NibbleAssimpPlugin
                 PluginRef.EngineRef.CompileShader(shader);
             }
 
-            material.AttachShader(shader);
+            //Load Samplers
+            int sampler_id = 0;
+            
+            //Attach DiffuseMap
+            if (mat.HasTextureDiffuse)
+            {
+                NbSampler sampler = new()
+                {
+                    SamplerID = sampler_id,
+                    ShaderBinding = "mpCustomPerMaterial.gDiffuseMap",
+                    Texture = ImportedTextures[mat.TextureDiffuse.FilePath]
+                };
+                sampler_id++;
+                material.Samplers.Add(sampler);
+            }
 
+            //Attach NormalMap
+            if (mat.HasTextureNormal)
+            {
+                NbSampler sampler = new()
+                {
+                    SamplerID = sampler_id,
+                    ShaderBinding = "mpCustomPerMaterial.gNormalMap",
+                    Texture = ImportedTextures[mat.TextureNormal.FilePath]
+                };
+                sampler_id++;
+                material.Samplers.Add(sampler);
+            }
+
+
+            //Attach EmissiveMap
+            if (mat.HasTextureEmissive)
+            {
+                NbSampler sampler = new()
+                {
+                    SamplerID = sampler_id,
+                    ShaderBinding = "mpCustomPerMaterial.gEmissiveMap",
+                    Texture = ImportedTextures[mat.TextureEmissive.FilePath]
+                };
+
+                sampler_id++;
+                material.Samplers.Add(sampler);
+            }
+
+            if (mat.HasColorDiffuse)
+            {
+                //Add material uniform
+                NbUniform uf = new()
+                {
+                    Name = "mainColor",
+                    Values = new NbVector4(mat.ColorDiffuse.R, mat.ColorDiffuse.G, mat.ColorDiffuse.B, mat.ColorDiffuse.A),
+                    State = new NbUniformState()
+                    {
+                        ShaderBinding = "mpCustomPerMaterial.uDiffuseFactor",
+                        Type = NbUniformType.Vector4
+                    }
+                };
+
+                material.Uniforms.Add(uf);
+            }
+
+            material.AttachShader(shader);
+            
             return material;
         }
 
@@ -168,6 +244,25 @@ namespace NibbleAssimpPlugin
             return metadata;
         }
 
+        public static Vector3D CalcTangent(Vector3D p0, Vector3D p1, Vector3D p2, 
+                                           Vector3D uv0, Vector3D uv1, Vector3D uv2)
+        {
+            Vector3D tangent = new();
+
+            Vector3D e1 = p1 - p0;
+            Vector3D e2 = p2 - p0;
+
+            Vector3D duv1 = uv1 - uv0;
+            Vector3D duv2 = uv2 - uv0;
+
+            float f = 1.0f / (duv1.X * duv2.Y - duv2.X * duv1.Y);
+
+            tangent.X = f * (duv2.Y * e1.X - duv1.Y * e2.X);
+            tangent.Y = f * (duv2.Y * e1.Y - duv1.Y * e2.Y);
+            tangent.Z = f * (duv2.Y * e1.Z - duv1.Y * e2.Z);
+
+            return tangent;
+        }
 
         public static NbMeshData GenerateMeshData(Mesh mesh)
         {
@@ -176,108 +271,177 @@ namespace NibbleAssimpPlugin
             //Populate buffers
             int bufferCount = 1; //Vertices
             int vx_stride = 12;
-            bufferCount += mesh.HasNormals ? 1 : 0; //Normals
-            vx_stride += mesh.HasNormals ? 12 : 0; //Normals
-            bufferCount += mesh.HasTextureCoords(0) ? 1 : 0; //Uvs
-            vx_stride += mesh.HasTextureCoords(0) ? 8 : 0; //Uvs
-
+            bufferCount += mesh.HasNormals ? 2 : 0; //Normals
+            vx_stride += mesh.HasNormals ? 24 : 0; //Normals
+            bufferCount += mesh.TextureCoordinateChannelCount; //Uvs
+            vx_stride += Math.Max(1, mesh.TextureCoordinateChannelCount) * 16; //Uvs
+            
             data.buffers = new bufInfo[bufferCount];
             data.VertexBufferStride = (uint) vx_stride;
-            data.VertexBuffer = new byte[vx_stride * mesh.VertexCount];
             
             //Prepare vx Buffers
-            data.buffers[0] = new()
+            int offset = 0;
+            int buf_index = 0;
+            data.buffers[buf_index] = new()
             {
                 count = 3,
                 normalize = false,
-                offset = 0x0,
+                offset = offset,
                 semantic = 0,
                 sem_text = "vPosition",
                 stride = (uint)vx_stride,
                 type = NbPrimitiveDataType.Float
             };
+            offset = 12;
+            buf_index = 1;
 
-            if (mesh.HasNormals)
+            //Buffer for normals
+            data.buffers[buf_index] = new()
             {
-                data.buffers[1] = new()
+                count = 3,
+                normalize = true,
+                offset = offset,
+                semantic = 2,
+                sem_text = "nPosition",
+                stride = (uint)vx_stride,
+                type = NbPrimitiveDataType.Float
+            };
+            offset += 12;
+            buf_index++;
+
+            //Buffer for tangents
+            data.buffers[buf_index] = new()
+            {
+                count = 3,
+                normalize = true,
+                offset = offset,
+                semantic = 3,
+                sem_text = "tPosition",
+                stride = (uint)vx_stride,
+                type = NbPrimitiveDataType.Float
+            };
+
+            offset += 12;
+            buf_index++;
+
+            
+            if (mesh.TextureCoordinateChannelCount > 0)
+            {
+                //2 UV channels are supported for now
+                data.buffers[buf_index] = new()
                 {
-                    count = 3,
+                    count = 4,
                     normalize = false,
-                    offset = 12,
-                    semantic = 2,
-                    sem_text = "nPosition",
-                    stride = (uint) vx_stride,
+                    offset = offset,
+                    semantic = 1,
+                    sem_text = "uvPosition",
+                    stride = (uint)vx_stride,
                     type = NbPrimitiveDataType.Float
                 };
             }
-
-            if (mesh.HasTextureCoords(0))
+            
+            //Convert Geometry
+            List<Vector3D> verts = new();
+            List<Vector3D> normals = new();
+            List<Vector3D> tangents = new();
+            List<List<Vector3D>> uvs = new();
+            for (int i = 0; i < mesh.TextureCoordinateChannelCount; i++)
+                uvs.Add(new());
+            
+            for (int i = 0; i < mesh.FaceCount; i++)
             {
-                data.buffers[2] = new()
+                int i1 = mesh.Faces[i].Indices[0];
+                int i2 = mesh.Faces[i].Indices[1];
+                int i3 = mesh.Faces[i].Indices[2];
+
+                Vector3D p1 = mesh.Vertices[i1];
+                Vector3D p2 = mesh.Vertices[i2];
+                Vector3D p3 = mesh.Vertices[i3];
+
+                //Add vertices
+                verts.Add(p1);
+                verts.Add(p2);
+                verts.Add(p3);
+
+                //Add Normals and tangents
+                normals.Add(mesh.Normals[i1]);
+                normals.Add(mesh.Normals[i2]);
+                normals.Add(mesh.Normals[i3]);
+
+                tangents.Add(mesh.Tangents[i1]);
+                tangents.Add(mesh.Tangents[i2]);
+                tangents.Add(mesh.Tangents[i3]);
+                
+                //Write UVs
+                for (int k = 0; k < Math.Min(2, mesh.TextureCoordinateChannelCount); k++)
                 {
-                    count = 2,
-                    normalize = false,
-                    offset = 24,
-                    semantic = 1,
-                    sem_text = "uvPosition",
-                    stride = (uint) vx_stride,
-                    type = NbPrimitiveDataType.Float
-                };
+                    uvs[k].Add(mesh.TextureCoordinateChannels[k][i1]);
+                    uvs[k].Add(mesh.TextureCoordinateChannels[k][i2]);
+                    uvs[k].Add(mesh.TextureCoordinateChannels[k][i3]);
+                }
             }
 
             //Copy vertex data
+            data.VertexBuffer = new byte[vx_stride * verts.Count];
             MemoryStream ms = new MemoryStream(data.VertexBuffer);
             BinaryWriter bw = new BinaryWriter(ms);
-            for (int i = 0; i < mesh.VertexCount; i++)
+            for (int i = 0; i < verts.Count; i++)
             {
-                Vector3D vec = mesh.Vertices[i];
-                bw.Write(vec.X);
-                bw.Write(vec.Y);
-                bw.Write(vec.Z);
+                //Verts
+                bw.Write(verts[i].X);
+                bw.Write(verts[i].Y);
+                bw.Write(verts[i].Z);
 
-                if (mesh.HasNormals)
-                {
-                    Vector3D normal = mesh.Normals[i];
-                    bw.Write(normal.X);
-                    bw.Write(normal.Y);
-                    bw.Write(normal.Z);
-                }
+                Vector3D normal = normals[i];
+                bw.Write(normal.X);
+                bw.Write(normal.Y);
+                bw.Write(normal.Z);
 
-                if (mesh.HasTextureCoords(0))
+                Vector3D tangent = tangents[i];
+                bw.Write(tangent.X);
+                bw.Write(tangent.Y);
+                bw.Write(tangent.Z);
+
+                //Write UVs
+                for (int j=0; j< 2; j++)
                 {
-                    Vector3D uv = mesh.TextureCoordinateChannels[0][i];
-                    bw.Write(uv.X);
-                    bw.Write(uv.Y);
+                    if (j >= uvs.Count)
+                    {
+                        bw.Write(0.0f);
+                        bw.Write(0.0f);
+                    } else
+                    {
+                        bw.Write(uvs[j][i].X);
+                        bw.Write(uvs[j][i].Y);
+                    }
                 }
             }
             ms.Close();
 
             //Write Indices
-            int indicesCount = 0;
-            if (mesh.Faces[0].IndexCount == 4)
-                indicesCount = mesh.FaceCount * 3 * 2;
-            else
-                indicesCount = mesh.FaceCount * 3;
-            data.IndicesLength = NbPrimitiveDataType.UnsignedInt;
-            data.IndexBuffer = new byte[indicesCount * sizeof(uint)];
-            
-            ms = new MemoryStream(data.IndexBuffer);
-            bw = new BinaryWriter(ms);
-
-            for (int i = 0; i < mesh.FaceCount; i++)
+            int indicesCount = verts.Count;
+            if (indicesCount < 0xFFFF)
             {
-                bw.Write(mesh.Faces[i].Indices[0]);
-                bw.Write(mesh.Faces[i].Indices[1]);
-                bw.Write(mesh.Faces[i].Indices[2]);
-                
-                if (mesh.Faces[i].IndexCount == 4)
-                {
-                    bw.Write(mesh.Faces[i].Indices[0]);
-                    bw.Write(mesh.Faces[i].Indices[2]);
-                    bw.Write(mesh.Faces[i].Indices[3]);
-                } 
-            }
+                data.IndicesLength = NbPrimitiveDataType.UnsignedShort;
+                data.IndexBuffer = new byte[indicesCount * sizeof(ushort)];
 
+                ms = new MemoryStream(data.IndexBuffer);
+                bw = new BinaryWriter(ms);
+
+                for (int i = 0; i < indicesCount; i++)
+                    bw.Write((ushort)i);
+                bw.Close();
+            } else
+            {
+                data.IndicesLength = NbPrimitiveDataType.UnsignedInt;
+                data.IndexBuffer = new byte[indicesCount * sizeof(uint)];
+                ms = new MemoryStream(data.IndexBuffer);
+                bw = new BinaryWriter(ms);
+                for (int i = 0; i < indicesCount; i++)
+                    bw.Write((uint) i);
+                bw.Close();
+            }
+            
             data.Hash = NbHasher.CombineHash(NbHasher.Hash(data.VertexBuffer),
                                              NbHasher.Hash(data.IndexBuffer));
             return data;
@@ -564,6 +728,7 @@ namespace NibbleAssimpPlugin
     
      * 
      */
+
 
     public class AssimpExporter
     {

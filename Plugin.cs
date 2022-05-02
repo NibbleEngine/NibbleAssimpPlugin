@@ -64,7 +64,7 @@ namespace NibbleAssimpPlugin
 
         public override void DrawExporters(SceneGraph scn)
         {
-            throw new NotImplementedException();
+            
         }
 
         public override void DrawImporters()
@@ -82,10 +82,9 @@ namespace NibbleAssimpPlugin
 
         public override void Import(string filepath)
         {
+            AssimpImporter.InitState(Path.GetDirectoryName(filepath));
             SceneGraphNode root = AssimpImporter.Import(filepath);
-            foreach (SceneGraphNode child in root.Children)
-                EngineRef.ImportScene(child);
-            root.Dispose(); //Dispose local root
+            EngineRef.ImportScene(root);
         }
 
         public override void OnUnload()
