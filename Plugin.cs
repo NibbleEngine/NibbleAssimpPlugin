@@ -28,23 +28,27 @@ namespace NibbleAssimpPlugin
         public override void OnLoad()
         {
             var assemblypath = Path.GetDirectoryName(System.Reflection.Assembly.GetExecutingAssembly().Location);
-            
-            //Generate Assimp Context
-            _ctx = new();
-            
+
+            //Load native assimp.dll
+            System.Runtime.InteropServices.NativeLibrary.Load(Path.Join(assemblypath, "assimp.dll"));
+
             //Set Context To Importer/Exporter classes
-            AssimpImporter._ctx = _ctx;
             AssimpImporter.PluginRef = this;
-            
+
+            Assimp.AssimpContext _ctx = new();
+
             //Fetch Supported file formats
             string[] ImportFormats =  _ctx.GetSupportedImportFormats();
             Assimp.ExportFormatDescription[] ExportFormatDescriptions = _ctx.GetSupportedExportFormats();
             string[] ExportFormats = new string[ExportFormatDescriptions.Length];
             for (int i=0;i< ExportFormatDescriptions.Length; i++)
-                ExportFormats[i] = ExportFormatDescriptions[i].FormatId;  
-            
+                ExportFormats[i] = ExportFormatDescriptions[i].FormatId;
+            _ctx.Dispose();
+
             openFileDialog = new("assimp-open-file", string.Join('|', ImportFormats), false); //Initialize OpenFileDialog
-            openFileDialog.SetDialogPath(assemblypath);
+            //openFileDialog.SetDialogPath(assemblypath);
+            openFileDialog.SetDialogPath("C:\\Users\\Greg\\Downloads\\glTF-Sample-Models\\2.0\\RiggedFigure\\glTF");
+            
 
             Log($"Supported Import Formats: {string.Join(' ', ImportFormats)}", LogVerbosityLevel.INFO);
             Log($"Supported Export Formats: {string.Join(' ', ExportFormats)}", LogVerbosityLevel.INFO);
@@ -82,15 +86,13 @@ namespace NibbleAssimpPlugin
 
         public override void Import(string filepath)
         {
-            AssimpImporter.InitState(Path.GetDirectoryName(filepath));
             SceneGraphNode root = AssimpImporter.Import(filepath);
             EngineRef.ImportScene(root);
         }
 
         public override void OnUnload()
         {
-            //Dispose Assimp Context
-            _ctx.Dispose();
+            
         }
     }
 }
