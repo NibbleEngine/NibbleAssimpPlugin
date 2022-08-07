@@ -14,14 +14,8 @@
 	<PackageReference Include="Newtonsoft.Json" Version="13.0.1" />
   </ItemGroup>
 
-	<ItemGroup>
-		<ProjectReference Include="..\NibbleDLL\NibbleDLL\NibbleDLL.csproj">
-			<Configuration>$(Configuration)</Configuration>
-		</ProjectReference>
-	</ItemGroup>
-
 	<Target Name="CopyCustomContentBuild" AfterTargets="AfterBuild">
-		<Copy SourceFiles="$(TargetDir)\NibbleAssimpPlugin.dll" DestinationFolder="E:\Projects\Nibble\NibbleEditor\Build\OpenGL_DEBUG\net5.0\win-x64\Plugins" />
+		<Copy SourceFiles="$(TargetDir)\NibbleAssimpPlugin.dll" DestinationFolder="E:\Projects\NibbleEngine\NibbleEditor\Build\OpenGL_DEBUG\net5.0\win-x64\Plugins" />
 		<Message Text="Shader files copied successfully." Importance="high" />
 	</Target>
 	
@@ -33,6 +27,9 @@
     <Reference Include="ImGui.NET">
 	  <HintPath>lib\ImGui.NET.dll</HintPath>
     </Reference>
+	  <Reference Include="Nibble">
+		  <HintPath>lib\Nibble.dll</HintPath>
+	  </Reference>
   </ItemGroup>
 
 </Project>
