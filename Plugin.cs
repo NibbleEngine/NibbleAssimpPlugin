@@ -1,5 +1,7 @@
 ﻿using System;
 using System.IO;
+using System.Threading;
+using Assimp;
 using NbCore;
 using NbCore.Plugins;
 using NbCore.UI.ImGui;
@@ -15,6 +17,7 @@ namespace NibbleAssimpPlugin
         private static readonly string PluginCreator = "gregkwaste";
         
         private OpenFileDialog openFileDialog;
+        private SaveFileDialog saveFileDialog;
         private Assimp.AssimpContext _ctx;
 
         public Plugin(Engine e) : base(e)
@@ -34,6 +37,7 @@ namespace NibbleAssimpPlugin
 
             //Set Context To Importer/Exporter classes
             AssimpImporter.PluginRef = this;
+            AssimpExporter.PluginRef = this;
 
             Assimp.AssimpContext _ctx = new();
 
@@ -41,14 +45,20 @@ namespace NibbleAssimpPlugin
             string[] ImportFormats =  _ctx.GetSupportedImportFormats();
             Assimp.ExportFormatDescription[] ExportFormatDescriptions = _ctx.GetSupportedExportFormats();
             string[] ExportFormats = new string[ExportFormatDescriptions.Length];
+            string[] ExportFormatExtensions = new string[ExportFormatDescriptions.Length];
             for (int i=0;i< ExportFormatDescriptions.Length; i++)
+            {
                 ExportFormats[i] = ExportFormatDescriptions[i].FormatId;
+                ExportFormatExtensions[i] = ExportFormatDescriptions[i].FileExtension;
+            }
             _ctx.Dispose();
 
             openFileDialog = new("assimp-open-file", string.Join('|', ImportFormats), false); //Initialize OpenFileDialog
-            //openFileDialog.SetDialogPath(assemblypath);
-            openFileDialog.SetDialogPath("C:\\Users\\Greg\\Downloads\\glTF-Sample-Models\\2.0\\RiggedFigure\\glTF");
+            saveFileDialog = new("assimp-save-file", ExportFormats, ExportFormatExtensions); //Initialize OpenFolderDialog
             
+            //openFileDialog.SetDialogPath(assemblypath);
+            openFileDialog.SetDialogPath("D:\\Downloads\\glTF-Sample-Models-master\\2.0\\RiggedFigure\\glTF");
+            saveFileDialog.SetDialogPath("D:\\Downloads");
 
             Log($"Supported Import Formats: {string.Join(' ', ImportFormats)}", LogVerbosityLevel.INFO);
             Log($"Supported Export Formats: {string.Join(' ', ExportFormats)}", LogVerbosityLevel.INFO);
@@ -64,11 +74,22 @@ namespace NibbleAssimpPlugin
                     Import(openFileDialog.GetSelectedFile());
                 }
             }
+
+            if (saveFileDialog != null) //TODO Check if plugin loaded instead of that
+            {
+                if (saveFileDialog.Draw(new System.Numerics.Vector2(600, 400)))
+                {
+                    Export(saveFileDialog.GetSaveFilePath(), saveFileDialog.GetSelectedFormat());
+                }
+            }
         }
 
         public override void DrawExporters(SceneGraph scn)
         {
-            
+            if (ImGuiCore.MenuItem("Assimp Export", "", false, true))
+            {
+                saveFileDialog.Open();
+            }
         }
 
         public override void DrawImporters()
@@ -84,10 +105,28 @@ namespace NibbleAssimpPlugin
             throw new NotImplementedException();
         }
 
+        public void Export(string filepath, string format)
+        {
+            try
+            {
+                AssimpExporter.ExportScene(EngineRef.GetActiveSceneGraph(), filepath, format);
+                Log($"Active Scene was exported in {filepath}", LogVerbosityLevel.INFO);
+            } catch (Exception ex)
+            {
+                Log(ex.Message, LogVerbosityLevel.ERROR);
+            }
+        }
+
         public override void Import(string filepath)
         {
-            SceneGraphNode root = AssimpImporter.Import(filepath);
-            EngineRef.ImportScene(root);
+            try
+            {
+                SceneGraphNode root = AssimpImporter.Import(filepath);
+                EngineRef.ImportScene(root);
+            } catch (Exception ex)
+            {
+                Log(ex.Message, LogVerbosityLevel.ERROR);
+            }
         }
 
         public override void OnUnload()

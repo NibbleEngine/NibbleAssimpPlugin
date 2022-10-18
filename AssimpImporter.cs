@@ -814,11 +814,10 @@ namespace NibbleAssimpPlugin
                 bone_index_type = NbPrimitiveDataType.UnsignedShort;
 
             if (bone_index_type == NbPrimitiveDataType.UnsignedShort)
-                vx_stride += bones_per_vertex * (2 + 4); //Short indices and floats for the weights
+                vx_stride += mesh.HasBones ? (bones_per_vertex * (2 + 4)) : 0; //Short indices and floats for the weights
             else
-                vx_stride += bones_per_vertex * (1 + 4); //byte indices and floats for the weights
+                vx_stride += mesh.HasBones ? (bones_per_vertex * (1 + 4)) : 0; //byte indices and floats for the weights
 
-                
             data.buffers = new bufInfo[bufferCount];
             data.VertexBufferStride = (uint) vx_stride;
             
@@ -1039,7 +1038,7 @@ namespace NibbleAssimpPlugin
                         bw.Write(uvs[j][i].Y);
                     }
 
-                    for (int j=uvs.Count - 1; j < 2; j++)
+                    for (int j= uvs.Count; j < 2; j++)
                     {
                         bw.Write(0.0f);
                         bw.Write(0.0f);
@@ -1048,32 +1047,34 @@ namespace NibbleAssimpPlugin
                 
                     
                 //Write BlendIndices
+                if (mesh.HasBones)
+                {
+                    for (int j = 0; j < blendIndices[i].Count; j++)
+                    {
+                        if (bone_index_type == NbPrimitiveDataType.UnsignedShort)
+                            bw.Write((short)blendIndices[i][j]);
+                        else
+                            bw.Write((byte)blendIndices[i][j]);
+                    }
+
+                    for (int j = blendIndices[i].Count; j < bones_per_vertex; j++)
+                    {
+                        if (bone_index_type == NbPrimitiveDataType.UnsignedShort)
+                            bw.Write((short)0);
+                        else
+                            bw.Write((byte)0);
+                    }
+
+                    //Write BlendWeights
+                    for (int j = 0; j < blendWeights[i].Count; j++)
+                        bw.Write(blendWeights[i][j]);
+
+                    for (int j = blendWeights[i].Count; j < bones_per_vertex; j++)
+                    {
+                        bw.Write(0.0f);
+                    }
+                }
                 
-                for (int j = 0; j < blendIndices[i].Count; j++)
-                {
-                    if (bone_index_type == NbPrimitiveDataType.UnsignedShort)
-                        bw.Write((short)blendIndices[i][j]);
-                    else
-                        bw.Write((byte)blendIndices[i][j]);
-                }
-
-                for (int j = blendIndices[i].Count; j < bones_per_vertex; j++)
-                {
-                    if (bone_index_type == NbPrimitiveDataType.UnsignedShort)
-                        bw.Write((short) 0);
-                    else
-                        bw.Write((byte) 0);
-                }
-                
-                //Write BlendWeights
-                for (int j = 0; j < blendWeights[i].Count; j++)
-                    bw.Write(blendWeights[i][j]);
-
-                for (int j = blendWeights[i].Count; j < bones_per_vertex; j++)
-                {
-                    bw.Write(0.0f);
-                }
-
             }
             ms.Close();
 
@@ -1394,133 +1395,5 @@ namespace NibbleAssimpPlugin
      */
 
 
-    public class AssimpExporter
-    {
-        public static Assimp.Matrix4x4 convertMatrix(NbMatrix4 localMat)
-        {
-            Assimp.Matrix4x4 mat = new()
-            {
-                A1 = localMat.Column0.X,
-                A2 = localMat.Column0.Y,
-                A3 = localMat.Column0.Z,
-                A4 = localMat.Column0.W,
-                B1 = localMat.Column1.X,
-                B2 = localMat.Column1.Y,
-                B3 = localMat.Column1.Z,
-                B4 = localMat.Column1.W,
-                C1 = localMat.Column2.X,
-                C2 = localMat.Column2.Y,
-                C3 = localMat.Column2.Z,
-                C4 = localMat.Column2.W,
-                D1 = localMat.Column3.X,
-                D2 = localMat.Column3.Y,
-                D3 = localMat.Column3.Z,
-                D4 = localMat.Column3.W
-            };
-
-            return mat;
-        }
-
-        public static Assimp.Vector3D convertVector(NbVector3 localVec)
-        {
-            Vector3D vec = new();
-            vec.X = localVec.X;
-            vec.Y = localVec.Y;
-            vec.Z = localVec.Z;
-            return vec;
-        }
-
-        public static Assimp.Quaternion convertQuaternion(NbQuaternion localQuat)
-        {
-            Quaternion q = new();
-            q.X = localQuat.X;
-            q.Y = localQuat.Y;
-            q.Z = localQuat.Z;
-            q.W = localQuat.W;
-            return q;
-        }
-
-        
-        //public static Animation AssimpExport(ref Assimp.Scene scn)
-        //{
-        //    Animation asAnim = new();
-        //    asAnim.Name = Anim;
-
-
-        //    //Make sure keyframe data is loaded from the files
-        //    if (!loaded)
-        //    {
-        //        FetchAnimMetaData();
-        //        loaded = true;
-        //    }
-
-
-
-        //    asAnim.TicksPerSecond = 60;
-        //    asAnim.DurationInTicks = animMeta.FrameCount;
-        //    float time_interval = 1.0f / (float)asAnim.TicksPerSecond;
-
-
-        //    //Add Node-Bone Channels
-        //    for (int i = 0; i < animMeta.NodeCount; i++)
-        //    {
-        //        string name = animMeta.NodeData[i].Node;
-        //        Assimp.NodeAnimationChannel mChannel = new();
-        //        mChannel.NodeName = name;
-
-        //        //mChannel.PostState = Assimp.AnimationBehaviour.Linear;
-        //        //mChannel.PreState = Assimp.AnimationBehaviour.Linear;
-
-
-        //        //Export Keyframe Data
-        //        for (int j = 0; j < animMeta.FrameCount; j++)
-        //        {
-
-        //            //Position
-        //            Assimp.VectorKey vk = new(j * time_interval, convertVector(animMeta.anim_positions[name][j]));
-        //            mChannel.PositionKeys.Add(vk);
-        //            //Rotation
-        //            Assimp.QuaternionKey qk = new(j * time_interval, convertQuaternion(animMeta.anim_rotations[name][j]));
-        //            mChannel.RotationKeys.Add(qk);
-        //            //Scale
-        //            Assimp.VectorKey sk = new(j * time_interval, convertVector(animMeta.anim_scales[name][j]));
-        //            mChannel.ScalingKeys.Add(sk);
-
-        //        }
-
-        //        asAnim.NodeAnimationChannels.Add(mChannel);
-
-        //    }
-
-        //    return asAnim;
-
-        //}
-
-        public static Node assimpExport(SceneGraphNode m, ref Assimp.Scene scn, ref Dictionary<int, int> meshImportStatus)
-        {
-
-            //Default shit
-            //Create assimp node
-            Node node = new(m.Name);
-            node.Transform = convertMatrix(TransformationSystem.GetEntityLocalMat(m));
-
-            //Handle animations maybe?
-            if (m.HasComponent<AnimComponent>())
-            {
-                AnimComponent cmp = m.GetComponent<AnimComponent>() as AnimComponent;
-                //TODO: Export Component to Assimp
-                //cmp.AssimpExport(ref scn);
-            }
-            
-            foreach (SceneGraphNode child in m.Children)
-            {
-                Node c = assimpExport(child, ref scn, ref meshImportStatus);
-                node.Children.Add(c);
-            }
-
-            return node;
-        }
-
-
-    }
+    
 }
