@@ -453,13 +453,13 @@ namespace NibbleAssimpPlugin
             if (mat.HasTextureNormal)
             {
                 LoadTexture(mat.TextureNormal.FilePath);
-                material.AddFlag(MaterialFlagEnum._NB_NORMAL_MAP);
+                material.AddFlag(NbMaterialFlagEnum._NB_NORMAL_MAP);
             }
                 
             if (mat.HasTextureEmissive)
             {
                 LoadTexture(mat.TextureEmissive.FilePath);
-                material.AddFlag(MaterialFlagEnum._NB_EMISSIVE_MAP);
+                material.AddFlag(NbMaterialFlagEnum._NB_EMISSIVE_MAP);
             }
 
             if (mat.HasTextureLightMap)
@@ -472,7 +472,7 @@ namespace NibbleAssimpPlugin
                 if (mat.PBR.HasTextureBaseColor)
                 {
                     LoadTexture(mat.PBR.TextureBaseColor.FilePath);
-                    material.AddFlag(MaterialFlagEnum._NB_DIFFUSE_MAP);
+                    material.AddFlag(NbMaterialFlagEnum._NB_DIFFUSE_MAP);
                 }
 
                 if (mat.PBR.HasTextureMetalness)
@@ -490,22 +490,22 @@ namespace NibbleAssimpPlugin
                         {
                             if (mat.TextureLightMap.FilePath == mat.PBR.TextureRoughness.FilePath)
                             {
-                                material.AddFlag(MaterialFlagEnum._NB_AO_METALLIC_ROUGHNESS_MAP);
+                                material.AddFlag(NbMaterialFlagEnum._NB_AO_METALLIC_ROUGHNESS_MAP);
                             }
                             else
                             {
-                                material.AddFlag(MaterialFlagEnum._NB_METALLIC_ROUGHNESS_MAP);
-                                material.AddFlag(MaterialFlagEnum._NB_AO_MAP);
+                                material.AddFlag(NbMaterialFlagEnum._NB_METALLIC_ROUGHNESS_MAP);
+                                material.AddFlag(NbMaterialFlagEnum._NB_AO_MAP);
                             }
                         } else
                         {
-                            material.AddFlag(MaterialFlagEnum._NB_METALLIC_ROUGHNESS_MAP);
+                            material.AddFlag(NbMaterialFlagEnum._NB_METALLIC_ROUGHNESS_MAP);
                         } 
                     
                     } else
                     {
                         if (mat.HasTextureLightMap)
-                            material.AddFlag(MaterialFlagEnum._NB_AO_MAP);
+                            material.AddFlag(NbMaterialFlagEnum._NB_AO_MAP);
                         //TODO: Add support for separated metallic roughness maps
                     }
                 } else
@@ -517,7 +517,7 @@ namespace NibbleAssimpPlugin
                 if (mat.HasTextureDiffuse)
                 {
                     LoadTexture(mat.TextureDiffuse.FilePath);
-                    material.AddFlag(MaterialFlagEnum._NB_DIFFUSE_MAP);
+                    material.AddFlag(NbMaterialFlagEnum._NB_DIFFUSE_MAP);
                 }
             }
 
@@ -578,7 +578,7 @@ namespace NibbleAssimpPlugin
                         Type = NbUniformType.Vector3
                     }
                 };
-
+                
                 material.Uniforms.Add(uf);
             }
 
@@ -818,7 +818,7 @@ namespace NibbleAssimpPlugin
             else
                 vx_stride += mesh.HasBones ? (bones_per_vertex * (1 + 4)) : 0; //byte indices and floats for the weights
 
-            data.buffers = new bufInfo[bufferCount];
+            data.buffers = new NbMeshBufferInfo[bufferCount];
             data.VertexBufferStride = (uint) vx_stride;
             
             //Prepare vx Buffers
@@ -831,7 +831,7 @@ namespace NibbleAssimpPlugin
                 offset = offset,
                 semantic = 0,
                 sem_text = "vPosition",
-                stride = (uint)vx_stride,
+                stride = vx_stride,
                 type = NbPrimitiveDataType.Float
             };
             offset = 12;
@@ -845,7 +845,7 @@ namespace NibbleAssimpPlugin
                 offset = offset,
                 semantic = 2,
                 sem_text = "nPosition",
-                stride = (uint)vx_stride,
+                stride = vx_stride,
                 type = NbPrimitiveDataType.Float
             };
             offset += 12;
@@ -861,9 +861,9 @@ namespace NibbleAssimpPlugin
                     offset = offset,
                     semantic = 3,
                     sem_text = "tPosition",
-                    stride = (uint)vx_stride,
+                    stride = vx_stride,
                     type = NbPrimitiveDataType.Float
-                };
+                };  
 
                 offset += 12;
                 buf_index++;
@@ -879,7 +879,7 @@ namespace NibbleAssimpPlugin
                     offset = offset,
                     semantic = 1,
                     sem_text = "uvPosition",
-                    stride = (uint)vx_stride,
+                    stride = vx_stride,
                     type = NbPrimitiveDataType.Float
                 };
 
@@ -898,7 +898,7 @@ namespace NibbleAssimpPlugin
                     offset = offset,
                     semantic = 5,
                     sem_text = "blendIndices",
-                    stride = (uint) vx_stride,
+                    stride = vx_stride,
                     type = bone_index_type
                 };
 
@@ -913,7 +913,7 @@ namespace NibbleAssimpPlugin
                     offset = offset,
                     semantic = 6,
                     sem_text = "blendWeights",
-                    stride = (uint) vx_stride,
+                    stride = vx_stride,
                     type = NbPrimitiveDataType.Float
                 };
             }

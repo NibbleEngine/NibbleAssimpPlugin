@@ -84,13 +84,13 @@ namespace NibbleAssimpPlugin
             return scn;
         }
 
-        private static Vector2D GetVector2(BinaryReader br, bufInfo buf)
+        private static Vector2D GetVector2(BinaryReader br, NbMeshBufferInfo buf)
         {
             return new Vector2D(GetFloat(br, buf.type),
                                 GetFloat(br, buf.type));
         }
 
-        private static Vector3D GetVector3(BinaryReader br, bufInfo buf)
+        private static Vector3D GetVector3(BinaryReader br, NbMeshBufferInfo buf)
         {
             switch (buf.type)
             {
@@ -148,7 +148,7 @@ namespace NibbleAssimpPlugin
 
             for (int j = 0; j < mesh.Data.buffers.Length; j++)
             {
-                bufInfo buf = mesh.Data.buffers[j];
+                NbMeshBufferInfo buf = mesh.Data.buffers[j];
                 br.BaseStream.Seek(buf.offset, SeekOrigin.Begin);
                 
                 if (buf.semantic == 0) //Vertices
@@ -244,7 +244,11 @@ namespace NibbleAssimpPlugin
         public static Material ExportMaterial(NbMaterial mat, ref Scene scn)
         {
             Material m = new Material();
-            m.ColorDiffuse = new Color4D(1.0f);
+            m.Name = mat.Name;
+            
+            m.PBR.rough
+
+
             return m;
         }
 
@@ -305,7 +309,6 @@ namespace NibbleAssimpPlugin
                         l.LightType = LightSourceType.Spot; break;
                 }
                 scn.Lights.Add(l);
-            
             }
 
             foreach (SceneGraphNode child in m.Children)
