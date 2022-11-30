@@ -33,13 +33,13 @@ namespace NibbleAssimpPlugin
             var assemblypath = Path.GetDirectoryName(System.Reflection.Assembly.GetExecutingAssembly().Location);
 
             //Load native assimp.dll
-            System.Runtime.InteropServices.NativeLibrary.Load(Path.Join(assemblypath, "assimp.dll"));
+            Assimp.Unmanaged.AssimpLibrary.Instance.LoadLibrary(Path.Join(assemblypath, "assimp.dll"));
 
             //Set Context To Importer/Exporter classes
-            AssimpImporter.PluginRef = this;
             AssimpExporter.PluginRef = this;
-
-            Assimp.AssimpContext _ctx = new();
+            AssimpImporter.PluginRef = this;
+            
+            AssimpContext _ctx = new();
 
             //Fetch Supported file formats
             string[] ImportFormats =  _ctx.GetSupportedImportFormats();
@@ -57,8 +57,8 @@ namespace NibbleAssimpPlugin
             saveFileDialog = new("assimp-save-file", ExportFormats, ExportFormatExtensions); //Initialize OpenFolderDialog
             
             //openFileDialog.SetDialogPath(assemblypath);
-            openFileDialog.SetDialogPath("D:\\Downloads\\glTF-Sample-Models-master\\2.0\\RiggedFigure\\glTF");
-            saveFileDialog.SetDialogPath("D:\\Downloads");
+            openFileDialog.SetDialogPath("G:\\Downloads\\glTF-Sample-Models-master\\2.0\\RiggedFigure\\glTF");
+            //saveFileDialog.SetDialogPath("G:\\Downloads");
 
             Log($"Supported Import Formats: {string.Join(' ', ImportFormats)}", LogVerbosityLevel.INFO);
             Log($"Supported Export Formats: {string.Join(' ', ExportFormats)}", LogVerbosityLevel.INFO);
@@ -113,6 +113,7 @@ namespace NibbleAssimpPlugin
                 Log($"Active Scene was exported in {filepath}", LogVerbosityLevel.INFO);
             } catch (Exception ex)
             {
+                Log(ex.StackTrace, LogVerbosityLevel.ERROR);
                 Log(ex.Message, LogVerbosityLevel.ERROR);
             }
         }

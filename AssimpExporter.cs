@@ -1,7 +1,9 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.IO;
+using System.Linq;
 using System.Reflection.PortableExecutable;
+using System.Security;
 using Assimp;
 using NbCore;
 using NbCore.Math;
@@ -61,6 +63,8 @@ namespace NibbleAssimpPlugin
         private static Dictionary<ulong, int> _exportedMeshMap;
         private static Dictionary<string, int> _exportedMaterialMap;
 
+
+
         private static void Init()
         {
             _ctx = new AssimpContext();
@@ -77,7 +81,8 @@ namespace NibbleAssimpPlugin
         {
             Init();
             Scene scn = new Scene();
-            Node n = ExportNode(g.Root, ref scn);
+            
+            Node n = ExportNode(g.Root, ref scn, ref g);
             scn.RootNode = n;
             _ctx.ExportFile(scn, filepath, format);
             Finalize();
@@ -136,14 +141,58 @@ namespace NibbleAssimpPlugin
             return -1.0f;
         }
 
-        private static Mesh ExportMesh(NbMesh mesh, ref Scene scn)
+        private static uint GetUInt(BinaryReader br, NbPrimitiveDataType type)
+        {
+            switch (type)
+            {
+                case NbPrimitiveDataType.UnsignedByte:
+                    return br.ReadByte();
+                case NbPrimitiveDataType.UnsignedInt:
+                    return br.ReadUInt32();
+                case NbPrimitiveDataType.UnsignedShort:
+                    return br.ReadUInt16();
+                case NbPrimitiveDataType.Int:
+                    return (uint) br.ReadInt32();
+                default:
+                    PluginRef.Log($"Unsupported Float Type {type}", LogVerbosityLevel.WARNING);
+                    break;
+            }
+
+            throw new NotImplementedException();
+        }
+
+        private static int GetInt(BinaryReader br, NbPrimitiveDataType type)
+        {
+            switch (type)
+            {
+                case NbPrimitiveDataType.UnsignedByte:
+                    return br.ReadByte();
+                case NbPrimitiveDataType.UnsignedInt:
+                    return (int) br.ReadUInt32();
+                case NbPrimitiveDataType.UnsignedShort:
+                    return br.ReadUInt16();
+                case NbPrimitiveDataType.Int:
+                    return br.ReadInt32();
+                default:
+                    PluginRef.Log($"Unsupported Float Type {type}", LogVerbosityLevel.WARNING);
+                    break;
+            }
+
+            throw new NotImplementedException();
+        }
+
+        private static Mesh ExportMesh(NbMesh mesh, ref Scene scn, ref SceneGraph scn_graph)
         {
             Mesh m = new Mesh();
+            m.PrimitiveType = PrimitiveType.Triangle;
             //Convert byte buffer to assimp
 
             MemoryStream ms = new MemoryStream(mesh.Data.VertexBuffer);
             BinaryReader br = new BinaryReader(ms);
-
+            Dictionary<string, Bone> mesh_bone_string_map = new();
+            Dictionary<int, Bone> mesh_bone_id_map = new();
+            Dictionary<int, int[]> mesh_boneIndices_perVertex = new();
+            
             int vertices_count = mesh.MetaData.VertrEndGraphics - mesh.MetaData.VertrStartGraphics + 1;
 
             for (int j = 0; j < mesh.Data.buffers.Length; j++)
@@ -155,12 +204,12 @@ namespace NibbleAssimpPlugin
                 {
                     for (int i = 0; i < vertices_count; i++)
                     {
+                        br.BaseStream.Seek(mesh.Data.VertexBufferStride * i + buf.offset, SeekOrigin.Begin);
                         Vector3D vec = new Vector3D();
 
                         for (int k = 0; k < buf.count; k++)
                             vec[k] = GetFloat(br, buf.type);
                         
-                        br.BaseStream.Seek(buf.stride, SeekOrigin.Current);
                         m.Vertices.Add(vec);
                     }
                 }
@@ -168,41 +217,92 @@ namespace NibbleAssimpPlugin
                 {
                     for (int i = 0; i < vertices_count; i++)
                     {
+                        br.BaseStream.Seek(mesh.Data.VertexBufferStride * i + buf.offset, SeekOrigin.Begin);
                         Vector3D vec1 = new Vector3D();
                         Vector3D vec2 = new Vector3D();
                         
                         vec1.X = GetFloat(br, buf.type);
-                        vec1.Y = GetFloat(br, buf.type);
+                        vec1.Y = 1.0f - GetFloat(br, buf.type);
                         vec2.X = GetFloat(br, buf.type);
-                        vec2.Y = GetFloat(br, buf.type);
+                        vec2.Y = 1.0f - GetFloat(br, buf.type);
 
-                        br.BaseStream.Seek(buf.stride, SeekOrigin.Current);
                         m.TextureCoordinateChannels[0].Add(vec1);
                         m.TextureCoordinateChannels[1].Add(vec2);
                     }
+                    m.UVComponentCount[0] = 2;
                 }
                 else if (buf.semantic == 2) //Normals
                 {
                     for (int i = 0; i < vertices_count; i++)
                     {
+                        br.BaseStream.Seek(mesh.Data.VertexBufferStride * i + buf.offset, SeekOrigin.Begin);
                         Vector3D vec = GetVector3(br, buf);
-                        
-                        br.BaseStream.Seek(buf.stride, SeekOrigin.Current);
                         m.Normals.Add(vec);
                     }
                 }
                 else if (buf.semantic == 3) //Tangents
                 {
+
                     for (int i = 0; i < vertices_count; i++)
                     {
+                        br.BaseStream.Seek(mesh.Data.VertexBufferStride * i + buf.offset, SeekOrigin.Begin);
                         Vector3D vec = new Vector3D();
 
                         for (int k = 0; k < buf.count; k++)
                             vec[k] = GetFloat(br, buf.type);
 
-                        br.BaseStream.Seek(buf.stride, SeekOrigin.Current);
                         m.Tangents.Add(vec);
                     }
+
+                }
+                else if (buf.semantic == 5) //BlendIndices
+                {
+                    for (int i = 0; i < vertices_count; i++)
+                    {
+                        mesh_boneIndices_perVertex[i] = new int[buf.count];
+                        for (int k = 0; k < buf.count; k++)
+                        {
+                            //Get local bone index
+                            int bone_id = GetInt(br, buf.type);
+                            int actual_joint_index = mesh.MetaData.BoneRemapIndices[bone_id];
+                            mesh_boneIndices_perVertex[i][k] = actual_joint_index;
+                            SceneGraphNode joint = scn_graph.GetJointNodeByJointID(actual_joint_index);
+                            
+                            //Create Bone if needed
+                            if (!mesh_bone_string_map.ContainsKey(joint.Name))
+                            {
+                                TransformComponent tc = (TransformComponent)joint.GetComponent<TransformComponent>();
+                                Bone bone = new Bone();
+                                bone.Name = joint.Name;
+                                bone.OffsetMatrix = convertMatrix(tc.Data.LocalTransformMat);
+                                
+                                m.Bones.Add(bone);
+                                mesh_bone_string_map.Add(joint.Name, bone);
+                                mesh_bone_id_map.Add(actual_joint_index, bone);
+                            }
+                        }
+
+                        br.BaseStream.Seek(buf.stride - buf.offset, SeekOrigin.Current);
+                    }
+                }
+                else if (buf.semantic == 6) //BlendWeights
+                {
+                    for (int i = 0; i < vertices_count; i++)
+                    {
+                        for (int k = 0; k < buf.count; k++)
+                        {
+                            //Get bone_weight
+                            float bone_weight = GetFloat(br, buf.type);
+
+                            VertexWeight vw;
+                            vw.VertexID = i;
+                            vw.Weight = bone_weight;
+                            mesh_bone_id_map[mesh_boneIndices_perVertex[i][k]].VertexWeights.Add(vw);
+                        }
+
+                        br.BaseStream.Seek(buf.stride - buf.offset, SeekOrigin.Current);
+                    }
+
                 }
                 else
                 {
@@ -245,21 +345,72 @@ namespace NibbleAssimpPlugin
         {
             Material m = new Material();
             m.Name = mat.Name;
+
+            //Material Parameters
+            m.ColorDiffuse = new(mat.DiffuseColor.Values.X,
+                                 mat.DiffuseColor.Values.Y,
+                                 mat.DiffuseColor.Values.Z,
+                                 mat.DiffuseColor.Values.W);
+
+            m.ColorAmbient = new(mat.AmbientColor.Values.X,
+                                 mat.AmbientColor.Values.Y,
+                                 mat.AmbientColor.Values.Z,
+                                 mat.AmbientColor.Values.W);
+
+            m.ColorSpecular = new(mat.SpecularColor.Values.X,
+                                  mat.SpecularColor.Values.Y,
+                                  mat.SpecularColor.Values.Z,
+                                  mat.SpecularColor.Values.W);
+
+
+            //Export Samplers
+            foreach (NbSampler sampler in mat.ActiveSamplers)
+            {
+                TextureSlot texSlot = new();
+                TextureSlot texSlot1 = new();
+                texSlot.FilePath = sampler.Texture.Path;
+
+                switch (sampler.ShaderBinding)
+                {
+                    case "mpCustomPerMaterial.gDiffuseMap":
+                        texSlot.TextureType = TextureType.Diffuse;
+                        m.AddMaterialTexture(texSlot);
+                        //Also add as PBR Base Color
+                        texSlot1.FilePath = sampler.Texture.Path;
+                        texSlot1.TextureType = TextureType.BaseColor;
+                        m.AddMaterialTexture(texSlot1);
+                        break;
+                    case "mpCustomPerMaterial.gNormalMap":
+                        texSlot.TextureType = TextureType.Normals;
+                        m.AddMaterialTexture(texSlot);
+                        break;
+                    case "mpCustomPerMaterial.gEmissiveMap":
+                        texSlot.TextureType = TextureType.Emissive;
+                        m.AddMaterialTexture(texSlot);
+                        break;
+                    case "mpCustomPerMaterial.gMasksMap":
+                        texSlot.TextureType = TextureType.Roughness;
+                        //Add a second slot for the metallic
+                        texSlot1.FilePath = sampler.Texture.Path;
+                        texSlot1.TextureType = TextureType.Metalness;
+                        m.AddMaterialTexture(texSlot);
+                        m.AddMaterialTexture(texSlot1);
+                        break;
+                }
+                
+            }
             
-            m.PBR.rough
-
-
             return m;
         }
 
-        public static Node ExportNode(SceneGraphNode m, ref Scene scn)
+        public static Node ExportNode(SceneGraphNode m, ref Scene scn, ref SceneGraph scn_graph)
         {
             if (_ctx is null) 
                 Init();
             
             if (m is null)
                 return null;
-            
+             
             //Default shit
             //Create assimp node
             Node node = new(m.Name);
@@ -275,7 +426,7 @@ namespace NibbleAssimpPlugin
                     if (!_exportedMeshMap.ContainsKey(mc.Mesh.Hash))
                     {
                         //Convert Mesh and Add to scene
-                        Mesh mesh = ExportMesh(mc.Mesh, ref scn);
+                        Mesh mesh = ExportMesh(mc.Mesh, ref scn, ref scn_graph);
                         _exportedMeshMap[mc.Mesh.Hash] = scn.MeshCount;
                         scn.Meshes.Add(mesh);
 
@@ -313,7 +464,7 @@ namespace NibbleAssimpPlugin
 
             foreach (SceneGraphNode child in m.Children)
             {
-                Node c = ExportNode(child, ref scn);
+                Node c = ExportNode(child, ref scn, ref scn_graph);
                 node.Children.Add(c);
             }
 

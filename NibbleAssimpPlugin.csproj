@@ -7,29 +7,34 @@
 	<BaseOutputPath>Build</BaseOutputPath>
     <AllowUnsafeBlocks>True</AllowUnsafeBlocks>
     <PlatformTarget>AnyCPU</PlatformTarget>
-	<ForceCopyNativeAssimp>true</ForceCopyNativeAssimp>
+	<CopyLocalLockFileAssemblies>true</CopyLocalLockFileAssemblies>
+	<ForceCopyNativeAssimp>false</ForceCopyNativeAssimp>
   </PropertyGroup>
 
   <ItemGroup>
-	<PackageReference Include="Newtonsoft.Json" Version="13.0.1" />
+	  <!--PackageReference Include="AssimpNet" Version="5.0.0-beta1"/-->
+      <PackageReference Include="Newtonsoft.Json" Version="13.0.1" />
   </ItemGroup>
 
-	<Target Name="CopyCustomContentBuild" AfterTargets="AfterBuild">
-		<Copy SourceFiles="$(TargetDir)\NibbleAssimpPlugin.dll" DestinationFolder="E:\Projects\NibbleEngine\NibbleEditor\Build\OpenGL_DEBUG\net5.0\win-x64\Plugins" />
-		<Message Text="Shader files copied successfully." Importance="high" />
-	</Target>
-	
 	
   <ItemGroup>
-    <Reference Include="AssimpNet">
-      <HintPath>lib\AssimpNet.dll</HintPath>
-    </Reference>
-    <Reference Include="ImGui.NET">
+	<Reference Include="AssimpNET">
+		<HintPath>lib\AssimpNet.dll</HintPath>
+	</Reference>
+	<Reference Include="ImGui.NET">
 	  <HintPath>lib\ImGui.NET.dll</HintPath>
     </Reference>
 	  <Reference Include="Nibble">
 		  <HintPath>lib\Nibble.dll</HintPath>
 	  </Reference>
   </ItemGroup>
+
+	<Target Name="CopyCustomContentBuild" AfterTargets="AfterBuild">
+		<Copy SourceFiles="lib\assimp.dll" DestinationFolder="$(TargetDir)" />
+		<Copy SourceFiles="$(TargetDir)NibbleAssimpPlugin.dll" DestinationFolder="..\NibbleEditor\Build\OpenGL_DEBUG\net5.0\win-x64\Plugins" />
+		<Copy Condition="'$(RuntimeIdentifier)' == 'win-x64'" SourceFiles="$(TargetDir)assimp.dll" DestinationFolder="..\NibbleEditor\Build\OpenGL_DEBUG\net5.0\win-x64\Plugins" />
+		<Copy SourceFiles="$(TargetDir)AssimpNet.dll" DestinationFolder="..\NibbleEditor\Build\OpenGL_DEBUG\net5.0\win-x64\Plugins"/>
+		<Message Text="Files copied successfully." Importance="high" />
+	</Target>
 
 </Project>
