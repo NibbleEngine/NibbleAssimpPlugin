@@ -369,7 +369,10 @@ namespace NibbleAssimpPlugin
                 TextureSlot texSlot = new();
                 TextureSlot texSlot1 = new();
                 texSlot.FilePath = sampler.Texture.Path;
-
+                var t = new MaterialProperty();
+                t.Name = "pbrMetallicRoughness.metallicRoughnessTexture";
+                t.SetStringValue("1");
+                
                 switch (sampler.ShaderBinding)
                 {
                     case "mpCustomPerMaterial.gDiffuseMap":

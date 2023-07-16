@@ -121,6 +121,9 @@ namespace NibbleAssimpPlugin
 
         private static SceneGraphNode GenerateMeshNode(Node node, Scene scn)
         {
+            //The engine does not support multiple mesh components per node
+            //For now we will create separate nodes per included assimp mesh
+
             SceneGraphNode _n = new SceneGraphNode(SceneNodeType.MESH)
             {
                 Name = node.Name,
@@ -128,38 +131,41 @@ namespace NibbleAssimpPlugin
 
             //Add Transform Component
             TransformData td = new();
-            
+
             TransformComponent tc = new(td);
             _n.AddComponent<TransformComponent>(tc);
 
             SetNodeTransform(_n, node);
 
-            Mesh assimp_mesh = scn.Meshes[node.MeshIndices[0]];
-            Material assimp_mat = scn.Materials[assimp_mesh.MaterialIndex];
-
-            NbMeshData nibble_mesh_data = GenerateMeshData(assimp_mesh);
-            NbMeshMetaData nibble_mesh_metadata = GenerateGeometryMetaData(nibble_mesh_data.VertexBuffer.Length / (int)nibble_mesh_data.VertexBufferStride,
-                                                                           nibble_mesh_data.IndexBuffer.Length / (3 * (nibble_mesh_data.IndicesLength == NbPrimitiveDataType.UnsignedShort ? 2 : 4)) , assimp_mesh.BoneCount);
-            NbMaterial nibble_mat = GenerateMaterial(assimp_mat, assimp_mesh);
-
-            //Generate NbMesh
-            NbMesh nibble_mesh = new()
+            for (int i = 0; i < scn.MeshCount; i++)
             {
-                Hash = NbHasher.CombineHash(nibble_mesh_data.Hash, nibble_mesh_metadata.GetHash()),
-                Data = nibble_mesh_data,
-                MetaData = nibble_mesh_metadata,
-                Material = nibble_mat
-            };
+                Mesh assimp_mesh = scn.Meshes[node.MeshIndices[i]];
+                Material assimp_mat = scn.Materials[assimp_mesh.MaterialIndex];
 
-            _MeshGroup.AddMesh(nibble_mesh);
+                NbMeshData nibble_mesh_data = GenerateMeshData(assimp_mesh);
+                NbMeshMetaData nibble_mesh_metadata = GenerateGeometryMetaData(nibble_mesh_data.VertexBuffer.Length / (int)nibble_mesh_data.VertexBufferStride,
+                                                                               nibble_mesh_data.IndexBuffer.Length / (3 * (nibble_mesh_data.IndicesLength == NbPrimitiveDataType.UnsignedShort ? 2 : 4)), assimp_mesh.BoneCount);
+                NbMaterial nibble_mat = GenerateMaterial(assimp_mat, assimp_mesh);
 
-            MeshComponent mc = new()
-            {
-                Mesh = nibble_mesh
-            };
+                //Generate NbMesh
+                NbMesh nibble_mesh = new()
+                {
+                    Hash = NbHasher.CombineHash(nibble_mesh_data.Hash, nibble_mesh_metadata.GetHash()),
+                    Data = nibble_mesh_data,
+                    MetaData = nibble_mesh_metadata,
+                    Material = nibble_mat
+                };
 
-            //TODO Process the corresponding mesh if needed
-            _n.AddComponent<MeshComponent>(mc);
+                _MeshGroup.AddOpaqueMesh(nibble_mesh);
+
+                MeshComponent mc = new()
+                {
+                    Mesh = nibble_mesh
+                };
+
+                //TODO Process the corresponding mesh if needed
+                _n.AddComponent<MeshComponent>(mc);
+            }
 
             return _n;
         }
@@ -186,7 +192,7 @@ namespace NibbleAssimpPlugin
             //Once all components are in place, properly populate
             if (sceneRef != null)
             {
-                SceneComponent sc = sceneRef.GetComponent<SceneComponent>() as SceneComponent;
+                SceneComponent sc = sceneRef.GetComponent<SceneComponent>();
                 sc.AddNode(_n);
             } else
             {
@@ -208,30 +214,26 @@ namespace NibbleAssimpPlugin
         public static SceneGraphNode Import(string filepath)
         {
             InitState(Path.GetDirectoryName(filepath));
-            //Scene scn = _ctx.ImportFile(filepath, PostProcessPreset.TargetRealTimeQuality |
-            //                                      PostProcessSteps.FlipUVs);
-            
-            Scene scn = _ctx.ImportFile(filepath, PostProcessSteps.Triangulate | PostProcessSteps.GenerateNormals | PostProcessSteps.CalculateTangentSpace |
+            Scene scn = _ctx.ImportFile(filepath, PostProcessSteps.Triangulate | PostProcessSteps.CalculateTangentSpace |
             PostProcessSteps.FlipUVs);
             
-            //Identify Joints
-            AnimComponent ac = GetAnimationComponent(scn);
-
             ClearState();
 
             SceneGraphNode root = ImportNode(scn.RootNode, scn, null);
 
-            //Fix joint info
-            foreach (string name in _joints)
+            //Check for animations and joints
+            if (scn.AnimationCount > 0)
             {
-                JointComponent jc = _jointNodes[name].GetComponent<JointComponent>() as JointComponent;
-                jc.JointIndex = _jointIndexMap[name];
-            }
+                //Identify Joints
+                AnimComponent ac = GetAnimationComponent(scn);
+                
+                //Fix joint info
+                foreach (string name in _joints)
+                {
+                    JointComponent jc = _jointNodes[name].GetComponent<JointComponent>() as JointComponent;
+                    jc.JointIndex = _jointIndexMap[name];
+                }
 
-
-            //Attach components
-            if (ac.AnimGroup.Animations.Count > 0)
-            {
                 _MeshGroup.JointCount = _joints.Count;
                 foreach (KeyValuePair<string, int> pair in _jointIndexMap)
                 {
@@ -424,7 +426,7 @@ namespace NibbleAssimpPlugin
             if (!ImportedTextures.ContainsKey(path))
             {
                 NbTexture tex = PluginRef.EngineRef.CreateTexture(Path.Join(WorkingDirectory, path),
-                    NbTextureWrapMode.Repeat, NbTextureFilter.Linear, NbTextureFilter.Linear);
+                    NbTextureWrapMode.Repeat, NbTextureFilter.LinearMipmapLinear, NbTextureFilter.Linear);
                 ImportedTextures[path] = tex;
             }
         }
@@ -449,7 +451,6 @@ namespace NibbleAssimpPlugin
 
             //Find out material flags
             
-                    
             if (mat.HasTextureNormal)
             {
                 LoadTexture(mat.TextureNormal.FilePath);
@@ -628,21 +629,20 @@ namespace NibbleAssimpPlugin
             //if (mat.HasProperty("$mat.gltf.pbrMetalli"))
 
 
-
             //Get correct shader config
-            GLSLShaderSource conf_vs = RenderState.engineRef.GetShaderSourceByFilePath("Shaders/Simple_VS.glsl");
-            GLSLShaderSource conf_fs = RenderState.engineRef.GetShaderSourceByFilePath("Shaders/ubershader_fs.glsl");
+            NbShaderSource conf_vs = RenderState.engineRef.GetShaderSourceByFilePath("./Assets/Shaders/Source/Simple_VS.glsl");
+            NbShaderSource conf_fs = RenderState.engineRef.GetShaderSourceByFilePath("./Assets/Shaders/Source/ubershader_fs.glsl");
             NbShaderMode conf_mode = NbShaderMode.DEFFERED;
 
             if (mesh.HasBones)
-                conf_mode = NbShaderMode.SKINNED | NbShaderMode.DEFFERED;
+                conf_mode |= NbShaderMode.SKINNED;
 
-            ulong conf_hash = GLSLShaderConfig.GetHash(conf_vs, conf_fs, null, null, null, conf_mode);
+            ulong conf_hash = NbShaderConfig.GetHash(conf_vs, conf_fs, null, null, null, conf_mode);
 
-            GLSLShaderConfig conf = PluginRef.EngineRef.GetShaderConfigByHash(conf_hash);
+            NbShaderConfig conf = PluginRef.EngineRef.GetShaderConfigByHash(conf_hash);
             if (conf == null)
             {
-                conf = new GLSLShaderConfig(conf_vs, conf_fs, null, null, null, conf_mode);
+                conf = new NbShaderConfig(conf_vs, conf_fs, null, null, null, conf_mode);
             }
 
             //Compile Material Shader

@@ -57,7 +57,7 @@ namespace NibbleAssimpPlugin
             saveFileDialog = new("assimp-save-file", ExportFormats, ExportFormatExtensions); //Initialize OpenFolderDialog
             
             //openFileDialog.SetDialogPath(assemblypath);
-            openFileDialog.SetDialogPath("G:\\Downloads\\glTF-Sample-Models-master\\2.0\\RiggedFigure\\glTF");
+            openFileDialog.SetDialogPath("C:\\Users\\Greg\\Downloads\\glTF-Sample-Models-master\\2.0");
             //saveFileDialog.SetDialogPath("G:\\Downloads");
 
             Log($"Supported Import Formats: {string.Join(' ', ImportFormats)}", LogVerbosityLevel.INFO);
