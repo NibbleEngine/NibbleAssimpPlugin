@@ -7,6 +7,7 @@ using NbCore.Math;
 using NbCore.Systems;
 using NbCore.Common;
 using System.Xml.Linq;
+using System.Threading;
 
 namespace NibbleAssimpPlugin
 {
@@ -137,13 +138,13 @@ namespace NibbleAssimpPlugin
 
             SetNodeTransform(_n, node);
 
-            for (int i = 0; i < scn.MeshCount; i++)
+            for (int i = 0; i < node.MeshIndices.Count; i++)
             {
                 Mesh assimp_mesh = scn.Meshes[node.MeshIndices[i]];
                 Material assimp_mat = scn.Materials[assimp_mesh.MaterialIndex];
 
                 NbMeshData nibble_mesh_data = GenerateMeshData(assimp_mesh);
-                NbMeshMetaData nibble_mesh_metadata = GenerateGeometryMetaData(nibble_mesh_data.VertexBuffer.Length / (int)nibble_mesh_data.VertexBufferStride,
+                NbMeshMetaData nibble_mesh_metadata = GenerateGeometryMetaData(assimp_mesh, nibble_mesh_data.VertexBuffer.Length / (int)nibble_mesh_data.VertexBufferStride,
                                                                                nibble_mesh_data.IndexBuffer.Length / (3 * (nibble_mesh_data.IndicesLength == NbPrimitiveDataType.UnsignedShort ? 2 : 4)), assimp_mesh.BoneCount);
                 NbMaterial nibble_mat = GenerateMaterial(assimp_mat, assimp_mesh);
 
@@ -156,6 +157,7 @@ namespace NibbleAssimpPlugin
                     Material = nibble_mat
                 };
 
+                //TODO: Add support for transparent meshes as well
                 _MeshGroup.AddOpaqueMesh(nibble_mesh);
 
                 MeshComponent mc = new()
@@ -163,7 +165,6 @@ namespace NibbleAssimpPlugin
                     Mesh = nibble_mesh
                 };
 
-                //TODO Process the corresponding mesh if needed
                 _n.AddComponent<MeshComponent>(mc);
             }
 
@@ -420,13 +421,13 @@ namespace NibbleAssimpPlugin
             return ac;
         }
 
-        private static void LoadTexture(string path)
+        private static void LoadTexture(string path, NbTextureFilter magFilter, NbTextureFilter minFilter, bool gamma_correct)
         {
             //Load texture here
             if (!ImportedTextures.ContainsKey(path))
             {
                 NbTexture tex = PluginRef.EngineRef.CreateTexture(Path.Join(WorkingDirectory, path),
-                    NbTextureWrapMode.Repeat, NbTextureFilter.LinearMipmapLinear, NbTextureFilter.Linear);
+                    NbTextureWrapMode.Repeat, minFilter, magFilter, gamma_correct);
                 ImportedTextures[path] = tex;
             }
         }
@@ -453,34 +454,34 @@ namespace NibbleAssimpPlugin
             
             if (mat.HasTextureNormal)
             {
-                LoadTexture(mat.TextureNormal.FilePath);
+                LoadTexture(mat.TextureNormal.FilePath, NbTextureFilter.Linear, NbTextureFilter.Linear, false);
                 material.AddFlag(NbMaterialFlagEnum._NB_NORMAL_MAP);
             }
                 
             if (mat.HasTextureEmissive)
             {
-                LoadTexture(mat.TextureEmissive.FilePath);
+                LoadTexture(mat.TextureEmissive.FilePath, NbTextureFilter.Linear, NbTextureFilter.Linear, true);
                 material.AddFlag(NbMaterialFlagEnum._NB_EMISSIVE_MAP);
             }
 
             if (mat.HasTextureLightMap)
             {
-                LoadTexture(mat.TextureLightMap.FilePath);
+                LoadTexture(mat.TextureLightMap.FilePath, NbTextureFilter.Linear, NbTextureFilter.Linear, false);
             }
 
             if (mat.IsPBRMaterial)
             {
                 if (mat.PBR.HasTextureBaseColor)
                 {
-                    LoadTexture(mat.PBR.TextureBaseColor.FilePath);
+                    LoadTexture(mat.PBR.TextureBaseColor.FilePath, NbTextureFilter.Linear, NbTextureFilter.Linear, true);
                     material.AddFlag(NbMaterialFlagEnum._NB_DIFFUSE_MAP);
                 }
 
                 if (mat.PBR.HasTextureMetalness)
-                    LoadTexture(mat.PBR.TextureMetalness.FilePath);
+                    LoadTexture(mat.PBR.TextureMetalness.FilePath, NbTextureFilter.Linear, NbTextureFilter.Linear, false);
                 
                 if (mat.PBR.HasTextureRoughness)
-                    LoadTexture(mat.PBR.TextureMetalness.FilePath);
+                    LoadTexture(mat.PBR.TextureMetalness.FilePath, NbTextureFilter.Linear, NbTextureFilter.Linear, false);
                 
                 //Figure out flag combo
                 if (mat.PBR.HasTextureMetalness && mat.PBR.HasTextureRoughness)
@@ -517,7 +518,7 @@ namespace NibbleAssimpPlugin
             {
                 if (mat.HasTextureDiffuse)
                 {
-                    LoadTexture(mat.TextureDiffuse.FilePath);
+                    LoadTexture(mat.TextureDiffuse.FilePath, NbTextureFilter.Linear, NbTextureFilter.Linear, true);
                     material.AddFlag(NbMaterialFlagEnum._NB_DIFFUSE_MAP);
                 }
             }
@@ -665,7 +666,7 @@ namespace NibbleAssimpPlugin
             return material;
         }
 
-        private static NbMeshMetaData GenerateGeometryMetaData(int vx_count, int tris_count, int bone_count)
+        private static NbMeshMetaData GenerateGeometryMetaData(Mesh mesh, int vx_count, int tris_count, int bone_count)
         {
             NbMeshMetaData metadata = new()
             {
@@ -673,16 +674,30 @@ namespace NibbleAssimpPlugin
                 FirstSkinMat = 0,
                 LastSkinMat = bone_count - 1,
                 VertrEndGraphics = vx_count - 1,
-                VertrEndPhysics = vx_count
+                VertrEndPhysics = vx_count,
+                AABBMAX = new NbVector3(-1000000.0f),
+                AABBMIN = new NbVector3(1000000.0f),
             };
+
 
             metadata.BoneRemapIndices = new int[bone_count];
             for (int i = 0; i < bone_count; i++)
                 metadata.BoneRemapIndices[i] = i;
 
+            //Calculated Bounding Box
+            for (int i = 0; i < mesh.VertexCount; i++)
+            {
+                Vector3D point = mesh.Vertices[i];
+                metadata.AABBMIN.X = Math.Min(metadata.AABBMIN.X, point.X);
+                metadata.AABBMIN.Y = Math.Min(metadata.AABBMIN.Y, point.Y);
+                metadata.AABBMIN.Z = Math.Min(metadata.AABBMIN.Z, point.Z);
+                metadata.AABBMAX.X = Math.Max(metadata.AABBMAX.X, point.X);
+                metadata.AABBMAX.Y = Math.Max(metadata.AABBMAX.Y, point.Y);
+                metadata.AABBMAX.Z = Math.Max(metadata.AABBMAX.Z, point.Z);
+            }
+
             return metadata;
         }
-
 
         public static Vector3D CalcTangent(Vector3D p0, Vector3D p1, Vector3D p2, 
                                            Vector3D uv0, Vector3D uv1, Vector3D uv2)
@@ -1088,3 +1103,4 @@ namespace NibbleAssimpPlugin
     
     
 }
+
