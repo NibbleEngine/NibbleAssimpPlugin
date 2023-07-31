@@ -817,7 +817,7 @@ namespace NibbleAssimpPlugin
                 count = 3,
                 normalize = false,
                 offset = offset,
-                semantic = 0,
+                semantic = NbBufferSemantic.VERTEX,
                 sem_text = "vPosition",
                 stride = vx_stride,
                 type = NbPrimitiveDataType.Float
@@ -831,7 +831,7 @@ namespace NibbleAssimpPlugin
                 count = 3,
                 normalize = true,
                 offset = offset,
-                semantic = 2,
+                semantic = NbBufferSemantic.NORMAL,
                 sem_text = "nPosition",
                 stride = vx_stride,
                 type = NbPrimitiveDataType.Float
@@ -847,7 +847,7 @@ namespace NibbleAssimpPlugin
                     count = 3,
                     normalize = true,
                     offset = offset,
-                    semantic = 3,
+                    semantic = NbBufferSemantic.TANGENT,
                     sem_text = "tPosition",
                     stride = vx_stride,
                     type = NbPrimitiveDataType.Float
@@ -865,7 +865,7 @@ namespace NibbleAssimpPlugin
                     count = 4,
                     normalize = false,
                     offset = offset,
-                    semantic = 1,
+                    semantic = NbBufferSemantic.UV,
                     sem_text = "uvPosition",
                     stride = vx_stride,
                     type = NbPrimitiveDataType.Float
@@ -884,7 +884,7 @@ namespace NibbleAssimpPlugin
                     count = bones_per_vertex,
                     normalize = false,
                     offset = offset,
-                    semantic = 5,
+                    semantic = NbBufferSemantic.BLENDINDICES,
                     sem_text = "blendIndices",
                     stride = vx_stride,
                     type = bone_index_type
@@ -899,7 +899,7 @@ namespace NibbleAssimpPlugin
                     count = bones_per_vertex,
                     normalize = false,
                     offset = offset,
-                    semantic = 6,
+                    semantic = NbBufferSemantic.BLENDWEIGHTS,
                     sem_text = "blendWeights",
                     stride = vx_stride,
                     type = NbPrimitiveDataType.Float

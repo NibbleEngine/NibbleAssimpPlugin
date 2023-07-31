@@ -200,7 +200,7 @@ namespace NibbleAssimpPlugin
                 NbMeshBufferInfo buf = mesh.Data.buffers[j];
                 br.BaseStream.Seek(buf.offset, SeekOrigin.Begin);
                 
-                if (buf.semantic == 0) //Vertices
+                if (buf.semantic == NbBufferSemantic.VERTEX) //Vertices
                 {
                     for (int i = 0; i < vertices_count; i++)
                     {
@@ -213,7 +213,7 @@ namespace NibbleAssimpPlugin
                         m.Vertices.Add(vec);
                     }
                 }
-                else if (buf.semantic == 1) //UVs
+                else if (buf.semantic == NbBufferSemantic.UV) //UVs
                 {
                     for (int i = 0; i < vertices_count; i++)
                     {
@@ -231,7 +231,7 @@ namespace NibbleAssimpPlugin
                     }
                     m.UVComponentCount[0] = 2;
                 }
-                else if (buf.semantic == 2) //Normals
+                else if (buf.semantic == NbBufferSemantic.NORMAL) //Normals
                 {
                     for (int i = 0; i < vertices_count; i++)
                     {
@@ -240,7 +240,7 @@ namespace NibbleAssimpPlugin
                         m.Normals.Add(vec);
                     }
                 }
-                else if (buf.semantic == 3) //Tangents
+                else if (buf.semantic == NbBufferSemantic.TANGENT) //Tangents
                 {
 
                     for (int i = 0; i < vertices_count; i++)
@@ -255,7 +255,7 @@ namespace NibbleAssimpPlugin
                     }
 
                 }
-                else if (buf.semantic == 5) //BlendIndices
+                else if (buf.semantic == NbBufferSemantic.BLENDINDICES) //BlendIndices
                 {
                     for (int i = 0; i < vertices_count; i++)
                     {
@@ -285,7 +285,7 @@ namespace NibbleAssimpPlugin
                         br.BaseStream.Seek(buf.stride - buf.offset, SeekOrigin.Current);
                     }
                 }
-                else if (buf.semantic == 6) //BlendWeights
+                else if (buf.semantic == NbBufferSemantic.BLENDWEIGHTS) //BlendWeights
                 {
                     for (int i = 0; i < vertices_count; i++)
                     {
