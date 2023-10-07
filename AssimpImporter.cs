@@ -8,6 +8,7 @@ using NbCore.Systems;
 using NbCore.Common;
 using System.Xml.Linq;
 using System.Threading;
+using System.Threading.Tasks.Dataflow;
 
 namespace NibbleAssimpPlugin
 {
@@ -145,9 +146,9 @@ namespace NibbleAssimpPlugin
 
                 NbMeshData nibble_mesh_data = GenerateMeshData(assimp_mesh);
                 NbMeshMetaData nibble_mesh_metadata = GenerateGeometryMetaData(assimp_mesh, nibble_mesh_data.VertexBuffer.Length / (int)nibble_mesh_data.VertexBufferStride,
-                                                                               nibble_mesh_data.IndexBuffer.Length / (3 * (nibble_mesh_data.IndicesLength == NbPrimitiveDataType.UnsignedShort ? 2 : 4)), assimp_mesh.BoneCount);
+                                                                               nibble_mesh_data.IndexBuffer.Length / (3 * (nibble_mesh_data.IndexFormat == NbPrimitiveDataType.UnsignedShort ? 2 : 4)), assimp_mesh.BoneCount);
                 NbMaterial nibble_mat = GenerateMaterial(assimp_mat, assimp_mesh);
-
+                 
                 //Generate NbMesh
                 NbMesh nibble_mesh = new()
                 {
@@ -809,6 +810,7 @@ namespace NibbleAssimpPlugin
             data.buffers = new NbMeshBufferInfo[bufferCount];
             data.VertexBufferStride = (uint) vx_stride;
             
+
             //Prepare vx Buffers
             int offset = 0;
             int buf_index = 0;
@@ -1067,10 +1069,11 @@ namespace NibbleAssimpPlugin
             ms.Close();
 
             //Write Indices
+            data.IndicesType = NbRenderPrimitive.Triangles;
             int indicesCount = verts.Count;
             if (indicesCount < 0xFFFF)
             {
-                data.IndicesLength = NbPrimitiveDataType.UnsignedShort;
+                data.IndexFormat = NbPrimitiveDataType.UnsignedShort;
                 data.IndexBuffer = new byte[indicesCount * sizeof(ushort)];
 
                 ms = new MemoryStream(data.IndexBuffer);
@@ -1081,7 +1084,7 @@ namespace NibbleAssimpPlugin
                 bw.Close();
             } else
             {
-                data.IndicesLength = NbPrimitiveDataType.UnsignedInt;
+                data.IndexFormat = NbPrimitiveDataType.UnsignedInt;
                 data.IndexBuffer = new byte[indicesCount * sizeof(uint)];
                 ms = new MemoryStream(data.IndexBuffer);
                 bw = new BinaryWriter(ms);

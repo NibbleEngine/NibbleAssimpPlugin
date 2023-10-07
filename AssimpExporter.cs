@@ -319,12 +319,12 @@ namespace NibbleAssimpPlugin
             {
                 uint f1 = 0, f2 = 0, f3 = 0;
                 
-                if (mesh.Data.IndicesLength == NbPrimitiveDataType.UnsignedShort)
+                if (mesh.Data.IndexFormat == NbPrimitiveDataType.UnsignedShort)
                 {
                     f1 = ibr.ReadUInt16();
                     f2 = ibr.ReadUInt16();
                     f3 = ibr.ReadUInt16();
-                } else if (mesh.Data.IndicesLength == NbPrimitiveDataType.UnsignedInt)
+                } else if (mesh.Data.IndexFormat == NbPrimitiveDataType.UnsignedInt)
                 {
                     f1 = ibr.ReadUInt32();
                     f2 = ibr.ReadUInt32();
