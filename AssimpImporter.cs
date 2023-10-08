@@ -3,7 +3,6 @@ using System.IO;
 using System.Collections.Generic;
 using Assimp;
 using NbCore;
-using NbCore.Math;
 using NbCore.Systems;
 using NbCore.Common;
 using System.Xml.Linq;
@@ -689,12 +688,12 @@ namespace NibbleAssimpPlugin
             for (int i = 0; i < mesh.VertexCount; i++)
             {
                 Vector3D point = mesh.Vertices[i];
-                metadata.AABBMIN.X = Math.Min(metadata.AABBMIN.X, point.X);
-                metadata.AABBMIN.Y = Math.Min(metadata.AABBMIN.Y, point.Y);
-                metadata.AABBMIN.Z = Math.Min(metadata.AABBMIN.Z, point.Z);
-                metadata.AABBMAX.X = Math.Max(metadata.AABBMAX.X, point.X);
-                metadata.AABBMAX.Y = Math.Max(metadata.AABBMAX.Y, point.Y);
-                metadata.AABBMAX.Z = Math.Max(metadata.AABBMAX.Z, point.Z);
+                metadata.AABBMIN.X = System.Math.Min(metadata.AABBMIN.X, point.X);
+                metadata.AABBMIN.Y = System.Math.Min(metadata.AABBMIN.Y, point.Y);
+                metadata.AABBMIN.Z = System.Math.Min(metadata.AABBMIN.Z, point.Z);
+                metadata.AABBMAX.X = System.Math.Max(metadata.AABBMAX.X, point.X);
+                metadata.AABBMAX.Y = System.Math.Max(metadata.AABBMAX.Y, point.Y);
+                metadata.AABBMAX.Z = System.Math.Max(metadata.AABBMAX.Z, point.Z);
             }
 
             return metadata;
@@ -737,7 +736,7 @@ namespace NibbleAssimpPlugin
             
             //Uvs
             bufferCount += mesh.TextureCoordinateChannelCount; //Uvs
-            vx_stride += Math.Min(1, mesh.TextureCoordinateChannelCount) * 16; //Uvs
+            vx_stride += System.Math.Min(1, mesh.TextureCoordinateChannelCount) * 16; //Uvs
             
 
             //Preprocess Bones
@@ -792,7 +791,7 @@ namespace NibbleAssimpPlugin
 
             int bones_per_vertex = 4;
             for (int i = 0; i < mesh.VertexCount; i++)
-                bones_per_vertex = Math.Max(vx_blend_indices[i].Count, bones_per_vertex);
+                bones_per_vertex = System.Math.Max(vx_blend_indices[i].Count, bones_per_vertex);
 
             bones_per_vertex += (bones_per_vertex % 4); //multiples of 4 bones per vertex
 
@@ -947,7 +946,7 @@ namespace NibbleAssimpPlugin
                 }
                 
                 //Write UVs
-                for (int k = 0; k < Math.Min(2, mesh.TextureCoordinateChannelCount); k++)
+                for (int k = 0; k < System.Math.Min(2, mesh.TextureCoordinateChannelCount); k++)
                 {
                     uvs[k].Add(mesh.TextureCoordinateChannels[k][i1]);
                     uvs[k].Add(mesh.TextureCoordinateChannels[k][i2]);

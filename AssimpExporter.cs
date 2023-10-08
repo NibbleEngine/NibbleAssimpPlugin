@@ -6,7 +6,6 @@ using System.Reflection.PortableExecutable;
 using System.Security;
 using Assimp;
 using NbCore;
-using NbCore.Math;
 using NbCore.Systems;
 using NbCore.Utils;
 
@@ -111,7 +110,7 @@ namespace NibbleAssimpPlugin
                         i2 = TwosComplement.toInt((value >> 10) & 0x3FF, 10);
                         i3 = TwosComplement.toInt((value >> 20) & 0x3FF, 10);
                         //int i4 = _2sComplement.toInt((value >> 30) & 0x003, 10);
-                        float norm = (float)Math.Sqrt(i1 * i1 + i2 * i2 + i3 * i3);
+                        float norm = (float)System.Math.Sqrt(i1 * i1 + i2 * i2 + i3 * i3);
                         return new Vector3D(Convert.ToSingle(i1) / norm,
                                             Convert.ToSingle(i2) / norm,
                                             Convert.ToSingle(i3) / norm);
@@ -132,7 +131,7 @@ namespace NibbleAssimpPlugin
                 case NbPrimitiveDataType.HalfFloat:
                     {
                         uint data = br.ReadUInt16();
-                        return NbCore.Math.Half.decompress(data);
+                        return NbCore.Half.decompress(data);
                     }
                 default:
                     PluginRef.Log($"Unsupported Float Type {type}", LogVerbosityLevel.WARNING);
